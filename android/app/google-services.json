@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "411093758435",
+    "project_id": "pim-core-ddb2e",
+    "storage_bucket": "pim-core-ddb2e.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:411093758435:android:cfabfb4b07419102a3f0d6",
+        "android_client_info": {
+          "package_name": "com.example.shoes_stores"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBU_j7fMT-MpSfFenLzpyXATNwal-iBlRY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:411093758435:android:e8b88d2705ebd44fa3f0d6",
+        "android_client_info": {
+          "package_name": "com.example.stripe"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBU_j7fMT-MpSfFenLzpyXATNwal-iBlRY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
