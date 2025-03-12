@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class CouponModel {
   final String id;
   final String restaurantId;
+  final String userId;
   final String description;
   final int discountPercentage;
   final int maxPeople;
@@ -11,7 +12,8 @@ class CouponModel {
   final DateTime createdAt;
   final DateTime? usedAt;
 
-  CouponModel({
+  CouponModel( {
+    required this.userId,
     required this.id,
     required this.restaurantId,
     required this.description,
@@ -35,6 +37,7 @@ class CouponModel {
       uniqueCode: json['uniqueCode'] as String,
       createdAt: (json['createdAt'] as Timestamp).toDate(),
       usedAt: json['usedAt'] != null ? (json['usedAt'] as Timestamp).toDate() : null,
+      userId: json['userId'] as String,
     );
   }
 
@@ -55,6 +58,7 @@ class CouponModel {
 
   /// 🔹 Créer une copie du coupon avec des valeurs modifiées
   CouponModel copyWith({
+    String? userId,
     String? id,
     String? restaurantId,
     String? description,
@@ -75,6 +79,7 @@ class CouponModel {
       uniqueCode: uniqueCode ?? this.uniqueCode,
       createdAt: createdAt ?? this.createdAt,
       usedAt: usedAt ?? this.usedAt,
+      userId: userId ?? this.userId,
     );
   }
 }

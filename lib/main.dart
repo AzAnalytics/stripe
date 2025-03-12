@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:stripe/authentification/signup_page.dart';
@@ -21,6 +22,11 @@ void main() async {
 
   // Initialisation Firebase AVANT de lancer l'application
   await Firebase.initializeApp();
+
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: AndroidProvider.playIntegrity, // ✅ Android
+    appleProvider: AppleProvider.deviceCheck, // ✅ iOS
+  );
 
   runApp(const MyApp());
 }
