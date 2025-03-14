@@ -111,13 +111,21 @@ class _SignupPageState extends State<SignupPage> {
             ),
           ),
           TextButton(
-              onPressed: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => const LoginPage()));
-              },
-              child: const Text('Login'))
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const LoginPage()),
+              );
+            },
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text("Déjà un compte ? ", style: TextStyle(color: Colors.black)),
+                Text("C'est ici", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+              ],
+            ),
+          )
+
         ],
       )),
     );

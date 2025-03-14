@@ -41,7 +41,7 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Text(
-              'Login Page',
+              'Accédez à vos offres gourmandes',
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
             Padding(
