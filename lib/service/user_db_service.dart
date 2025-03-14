@@ -21,18 +21,24 @@ class UserDbService {
     });
   }
 
-  /// 🔥 Vérification de l’abonnement actif
+  /// 🔥 Vérification en temps réel de l’abonnement actif
   Stream<SubscriptionStatus> get checkSubscriptionIsActive {
     return firestore
         .collection('users')
         .doc(uid)
         .collection('subscriptions')
         .snapshots()
-        .map((event) => checkUserHaveActiveSubscription(event));
+        .map((event) => _checkUserHaveActiveSubscription(event));
   }
 
-  /// 🔥 Vérification si l'utilisateur a un abonnement actif
-  SubscriptionStatus checkUserHaveActiveSubscription(QuerySnapshot qs) {
+  /// 🔥 Vérifier une seule fois l'abonnement actif (sans Stream)
+  Future<SubscriptionStatus> getUserSubscriptionStatus() async {
+    QuerySnapshot qs = await firestore.collection('users').doc(uid).collection('subscriptions').get();
+    return _checkUserHaveActiveSubscription(qs);
+  }
+
+  /// 🔥 Vérifie si l'utilisateur a un abonnement actif
+  SubscriptionStatus _checkUserHaveActiveSubscription(QuerySnapshot qs) {
     for (var ds in qs.docs) {
       final data = ds.data() as Map<String, dynamic>?;
 
@@ -44,9 +50,9 @@ class UserDbService {
         String currentPriceId = '';
 
         if (priceDocRef != null && stripeData != null) {
-          if (priceDocRef.id.contains(stripeData!.sub1priceId)) {
+          if (priceDocRef.id == stripeData!.sub1priceId) {
             currentPriceId = stripeData!.sub1priceId;
-          } else if (priceDocRef.id.contains(stripeData!.sub2priceId)) {
+          } else if (priceDocRef.id == stripeData!.sub2priceId) {
             currentPriceId = stripeData!.sub2priceId;
           }
         }

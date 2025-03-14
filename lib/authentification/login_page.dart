@@ -116,7 +116,7 @@ class _LoginPageState extends State<LoginPage> {
 
     try {
       FirebaseAuth auth = FirebaseAuth.instance;
-      UserCredential userCredential = await auth.signInWithEmailAndPassword(
+      await auth.signInWithEmailAndPassword(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
       );
@@ -124,12 +124,10 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
       setState(() => showLoading = false);
 
-      // 🔥 Redirection vers HomePage après connexion réussie
+      // ✅ Redirection sans passer d'UID
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(
-          builder: (context) => HomePage(uid: userCredential.user!.uid),
-        ),
+        MaterialPageRoute(builder: (context) => const HomePage()),
       );
     } catch (e) {
       if (!mounted) return;
@@ -153,4 +151,5 @@ class _LoginPageState extends State<LoginPage> {
       );
     }
   }
+
 }
