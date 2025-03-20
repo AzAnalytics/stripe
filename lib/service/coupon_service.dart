@@ -5,27 +5,33 @@ class CouponService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   /// 🔥 Récupérer la description du coupon depuis le restaurant
-  Future<String> getCouponDescription(String restaurantId, String uniqueCode) async {
+  Future<String> getCouponDescription(String restaurantId) async {
     try {
       var couponSnapshot = await _firestore
           .collection('restaurants')
           .doc(restaurantId)
           .collection('coupons')
-          .where('uniqueCode', isEqualTo: uniqueCode)
-          .limit(1)
+          .limit(1) // ✅ Récupère uniquement le premier coupon
           .get();
 
-      return couponSnapshot.docs.firstOrNull?.get('description') ?? "Pas de description disponible";
+      if (couponSnapshot.docs.isNotEmpty) {
+        return couponSnapshot.docs.first.get('description') ?? "Pas de description disponible";
+      }
+      return "Pas de description disponible";
     } catch (e) {
       print("❌ Erreur récupération description coupon : $e");
       return "Erreur lors du chargement";
     }
   }
 
+
+
+
   /// 🔹 Obtenir ou créer un coupon unique pour un utilisateur et un restaurant
   Future<String> getOrCreateUserCoupon(String restaurantId, String userId) async {
     try {
-      var query = await _firestore
+      // 🔍 Vérifie si l'utilisateur a déjà un coupon unique
+      var existingCoupon = await _firestore
           .collection('restaurants')
           .doc(restaurantId)
           .collection('coupons')
@@ -33,12 +39,27 @@ class CouponService {
           .limit(1)
           .get();
 
-      if (query.docs.isNotEmpty) {
-        return query.docs.first.get('uniqueCode') ?? "Erreur";
+      if (existingCoupon.docs.isNotEmpty) {
+        return existingCoupon.docs.first.get('uniqueCode'); // 🔥 Retourne le code existant
       }
 
+      // 🔍 Récupère le coupon global du restaurant
+      var restaurantCoupon = await _firestore
+          .collection('restaurants')
+          .doc(restaurantId)
+          .collection('coupons')
+          .limit(1) // 🔥 Récupère uniquement le 1er coupon du restaurant
+          .get();
+
+      if (restaurantCoupon.docs.isEmpty) {
+        return "Erreur : Aucun coupon disponible"; // ❌ Aucun coupon global trouvé
+      }
+
+      // 🔥 Génère un code unique pour l'utilisateur
       String uniqueCode = generateUniqueCode();
-      DocumentReference docRef = await _firestore
+
+      // 📝 Ajoute l'utilisateur à un coupon unique basé sur le coupon global
+      DocumentReference userCouponRef = await _firestore
           .collection('restaurants')
           .doc(restaurantId)
           .collection('coupons')
@@ -46,18 +67,22 @@ class CouponService {
         "restaurantId": restaurantId,
         "userId": userId,
         "uniqueCode": uniqueCode,
+        "description": restaurantCoupon.docs.first.get('description'), // 🔥 Récupère la description du coupon global
+        "discountPercentage": restaurantCoupon.docs.first.get('discountPercentage'),
+        "maxPeople": restaurantCoupon.docs.first.get('maxPeople'),
         "isActive": true,
         "createdAt": Timestamp.now(),
         "usedAt": null,
       });
 
-      print("✅ Coupon ajouté avec ID : ${docRef.id}");
+      print("✅ Nouveau coupon généré avec ID : ${userCouponRef.id} pour l'utilisateur $userId");
       return uniqueCode;
     } catch (e) {
       print("❌ Erreur génération coupon : $e");
       return "Erreur";
     }
   }
+
 
   /// 🔹 Générer un code unique aléatoire
   String generateUniqueCode() {

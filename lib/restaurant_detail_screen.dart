@@ -128,19 +128,19 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                   if (couponSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  if (!couponSnapshot.hasData || couponSnapshot.data == "Erreur") {
+                  if (!couponSnapshot.hasData || couponSnapshot.data == "Aucun coupon disponible") {
                     return const Center(child: Text("Aucun coupon disponible."));
                   }
 
-                  String couponCode = couponSnapshot.data!; // 🔥 Code unique pour l'utilisateur
+                  String couponCode = couponSnapshot.data!;
 
                   return FutureBuilder<String>(
-                    future: _couponService.getCouponDescription(widget.restaurantId, couponCode), // ✅ Récupère la description
+                    future: _couponService.getCouponDescription(widget.restaurantId),
                     builder: (context, descSnapshot) {
                       if (descSnapshot.connectionState == ConnectionState.waiting) {
                         return const Center(child: CircularProgressIndicator());
                       }
-                      String description = descSnapshot.data ?? "Pas de description disponible"; // 🔥 Assure une description correcte
+                      String description = descSnapshot.data ?? "Pas de description disponible";
 
                       return Container(
                         margin: const EdgeInsets.all(10),
@@ -158,12 +158,12 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              couponCode, // 🔥 Affiche le code unique
+                              couponCode, // ✅ Affiche le code unique du coupon
                               style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
                             ),
                             const SizedBox(height: 5),
                             Text(
-                              description, // 🔥 Affiche la description du coupon
+                              description, // ✅ Affiche la description du coupon
                               textAlign: TextAlign.center,
                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
                             ),
