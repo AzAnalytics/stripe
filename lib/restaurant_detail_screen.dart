@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:stripe/service/firebase_service.dart';
+import 'package:stripe/widgets/restaurant_comments.dart';
 import '../models/restaurant_model.dart';
 import '../widgets/restaurant_info_card.dart';
 import '../service/coupon_service.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../service/url_launcher_service.dart';
+import '../service/storage_service.dart';
+import '../widgets/qr_code_dialog.dart';
+import '../widgets/image_carousel.dart';
+import '../widgets/fullscreen_image.dart';
 
 class RestaurantDetailScreen extends StatefulWidget {
   final String restaurantId;
@@ -20,6 +23,10 @@ class RestaurantDetailScreen extends StatefulWidget {
 class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
   final FirebaseService _firebaseService = FirebaseService();
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final UrlLauncherService _urlLauncherService = UrlLauncherService();
+  final StorageService _imageService = StorageService();
+  final CouponService _couponService = CouponService();
+
   Restaurant? restaurant;
   bool isLoading = true;
   String? userId;
@@ -48,90 +55,6 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
     if (mounted) setState(() => isLoading = false);
   }
 
-  /// 🔹 Ouvrir Google Maps avec l'adresse du restaurant
-  void openGoogleMaps(String address) async {
-    final Uri googleMapsAppUri = Uri.parse("geo:0,0?q=${Uri.encodeComponent(address)}");
-    final Uri googleMapsWebUri =
-    Uri.parse("https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(address)}");
-
-    if (await canLaunchUrl(googleMapsAppUri)) {
-      await launchUrl(googleMapsAppUri);
-    } else if (await canLaunchUrl(googleMapsWebUri)) {
-      await launchUrl(googleMapsWebUri, mode: LaunchMode.externalApplication);
-    } else {
-      print("❌ Impossible d'ouvrir Google Maps");
-    }
-  }
-
-  /// 🔹 Récupérer les images des plats depuis Firebase Storage
-  Future<List<String>> getPlatsImages(List<String> plats) async {
-    List<String> imageUrls = [];
-    for (String filePath in plats) {
-      try {
-        String url = await FirebaseStorage.instance.ref(filePath).getDownloadURL();
-        imageUrls.add(url);
-      } catch (e) {
-        print("❌ Erreur récupération image: $e");
-      }
-    }
-    return imageUrls;
-  }
-
-  /// 🔹 Afficher le QR Code
-  void _showQrCodeDialog(String couponCode) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text("Votre QR Code"),
-          content: SizedBox(
-            width: 250,
-            height: 300,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                QrImageView(
-                  data: couponCode,
-                  version: QrVersions.auto,
-                  size: 200.0,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  "Code : $couponCode",
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Fermer"),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// 🔹 Afficher une image en plein écran
-  void _showFullImage(String imagePath) {
-    showDialog(
-      context: context,
-      builder: (context) {
-        return Dialog(
-          backgroundColor: Colors.transparent,
-          child: GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: InteractiveViewer(
-              child: Image.network(imagePath, fit: BoxFit.contain),
-            ),
-          ),
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +76,10 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
             RestaurantInfoCard(restaurant: restaurant!),
             const SizedBox(height: 16),
 
+            /// ✅ Section Commentaires
+            RestaurantComments(restaurantId: widget.restaurantId),
+            const SizedBox(height: 16),
+
             /// ✅ Bouton pour ouvrir Google Maps avec l'adresse
             if (restaurant?.address != null)
               Padding(
@@ -160,108 +87,104 @@ class _RestaurantDetailScreenState extends State<RestaurantDetailScreen> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.map),
                   label: const Text("Voir sur Google Maps"),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.orange,
-                  ),
-                  onPressed: () => openGoogleMaps(restaurant!.address),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+                  onPressed: () => _urlLauncherService.openGoogleMaps(restaurant!.address),
                 ),
               ),
-
             const SizedBox(height: 16),
+
 
             /// ✅ Affichage du carrousel des plats
             if (plats.isNotEmpty)
               FutureBuilder<List<String>>(
-                future: getPlatsImages(plats),
+                future: _imageService.getPlatsImages(plats),
                 builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  return _buildImageCarousel(snapshot.data!);
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text("Aucune image disponible."));
+                  }
+
+                  return ImageCarousel(
+                    images: snapshot.data!,
+                    onImageTap: (imagePath) { // ✅ Passe une fonction qui ouvre le FullScreenImage
+                      showDialog(
+                        context: context,
+                        builder: (context) => FullScreenImage(imagePath: imagePath),
+                      );
+                    },
+                  );
                 },
               ),
 
             const SizedBox(height: 16),
 
             /// ✅ Affichage du coupon SEULEMENT si l'utilisateur est connecté
-            if (userId == null)
-              const Center(
-                child: Text("🔒 Connectez-vous pour voir votre coupon !"),
-              )
-            else
+            if (userId != null)
               FutureBuilder<String>(
-                future: CouponService().getOrCreateUserCoupon(widget.restaurantId, userId!),
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
+                future: _couponService.getOrCreateUserCoupon(widget.restaurantId, userId!),
+                builder: (context, couponSnapshot) {
+                  if (couponSnapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return const Center(child: Text("❌ Impossible de récupérer le coupon."));
+                  if (!couponSnapshot.hasData || couponSnapshot.data == "Erreur") {
+                    return const Center(child: Text("Aucun coupon disponible."));
                   }
 
-                  return Container(
-                    margin: const EdgeInsets.all(10),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
-                      boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
-                    ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          "Votre Coupon",
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  String couponCode = couponSnapshot.data!; // 🔥 Code unique pour l'utilisateur
+
+                  return FutureBuilder<String>(
+                    future: _couponService.getCouponDescription(widget.restaurantId, couponCode), // ✅ Récupère la description
+                    builder: (context, descSnapshot) {
+                      if (descSnapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      String description = descSnapshot.data ?? "Pas de description disponible"; // 🔥 Assure une description correcte
+
+                      return Container(
+                        margin: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(15),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
                         ),
-                        const SizedBox(height: 10),
-                        Text(
-                          snapshot.data!,
-                          style: const TextStyle(
-                              fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
+                        child: Column(
+                          children: [
+                            const Text(
+                              "Votre Coupon",
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              couponCode, // 🔥 Affiche le code unique
+                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.orange),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              description, // 🔥 Affiche la description du coupon
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                            ),
+                            const SizedBox(height: 10),
+                            ElevatedButton(
+                              onPressed: () => showDialog(
+                                context: context,
+                                builder: (context) => QrCodeDialog(couponCode: couponCode),
+                              ),
+                              child: const Text("Afficher QR Code"),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 10),
-                        ElevatedButton(
-                          onPressed: () {
-                            _showQrCodeDialog(snapshot.data!);
-                          },
-                          child: const Text("Afficher QR Code"),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
               ),
           ],
         ),
       ),
-    );
-  }
-
-  /// 🔹 Afficher le carrousel des images des plats
-  Widget _buildImageCarousel(List<String> images) {
-    return Column(
-      children: [
-        SizedBox(
-          height: 250,
-          child: PageView.builder(
-            itemCount: images.length,
-            itemBuilder: (context, index) {
-              return GestureDetector(
-                onTap: () => _showFullImage(images[index]),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.network(
-                    images[index],
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 10),
-      ],
     );
   }
 }

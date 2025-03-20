@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:stripe/filters/city_filter.dart';
+import 'package:stripe/filters/cuisine_filter.dart';
 import 'package:stripe/restaurant_detail_screen.dart';
+
 
 class RestaurantListScreen extends StatefulWidget {
   const RestaurantListScreen({super.key});
@@ -13,6 +16,8 @@ class RestaurantListScreen extends StatefulWidget {
 class _RestaurantListScreenState extends State<RestaurantListScreen> {
   List<Map<String, dynamic>> restaurants = [];
   bool isLoading = true;
+  String? selectedCity;
+  String? selectedCuisine;
   final String defaultImageUrl = 'https://upload.wikimedia.org/wikipedia/commons/a/ac/No_image_available.svg';
 
   @override
@@ -21,86 +26,41 @@ class _RestaurantListScreenState extends State<RestaurantListScreen> {
     fetchRestaurants();
   }
 
-  /// 🔹 **Formatage du nom (apostrophes, majuscules)**
-  String formatRestaurantName(String rawName) {
-    if (rawName.isEmpty) return "Restaurant inconnu";
-
-    // ✅ Décode les caractères spéciaux (ex: %27 → ' )
-    String formattedName = Uri.decodeComponent(rawName);
-
-    // ✅ Remplace `_` par un espace
-    formattedName = formattedName.replaceAll("_", " ");
-
-    // ✅ 1ʳᵉ lettre en majuscule
-    return formattedName[0].toUpperCase() + formattedName.substring(1);
-  }
-
-  /// 🔹 **Récupère l’image de la salle depuis Firebase Storage**
-  Future<String> getDownloadUrl(String filePath) async {
-    if (filePath.isEmpty) return defaultImageUrl;
-
-    // ✅ Vérifie si l’URL est déjà complète
-    if (filePath.startsWith("https://")) {
-      return filePath;
-    }
-
-    // ✅ Nettoyage du chemin et encodage correct
-    String cleanedPath = filePath.trim().replaceAll(" ", "%20");
-
-    try {
-      // ✅ Vérifie si l'image existe réellement dans Firebase Storage
-      final ref = FirebaseStorage.instance.ref(cleanedPath);
-      String downloadUrl = await ref.getDownloadURL();
-
-      print("✅ URL Firebase obtenue: $downloadUrl");
-      return downloadUrl;
-    } catch (e) {
-      print("❌ Erreur récupération URL Firebase: $e");
-      return defaultImageUrl;
-    }
-  }
-
-  /// 🔹 **Récupérer les restaurants depuis Firestore**
-  // 🔹 Récupère les restaurants depuis Firestore et formate les données
+  /// 🔹 **Récupérer les restaurants avec filtres**
   Future<void> fetchRestaurants() async {
-    try {
-      var querySnapshot = await FirebaseFirestore.instance.collection('restaurants').get();
+    setState(() => isLoading = true);
 
-      if (querySnapshot.docs.isEmpty) {
-        print("❌ Aucun restaurant trouvé.");
-        if (mounted) setState(() => isLoading = false);
-        return;
+    try {
+      Query query = FirebaseFirestore.instance.collection('restaurants');
+
+      // ✅ Filtre par ville
+      if (selectedCity != null && selectedCity!.isNotEmpty) {
+        query = query.where('city', isEqualTo: selectedCity);
       }
+
+      // ✅ Filtre par type de cuisine
+      if (selectedCuisine != null && selectedCuisine!.isNotEmpty) {
+        query = query.where('cuisineType', isEqualTo: selectedCuisine);
+      }
+
+      var querySnapshot = await query.get();
 
       List<Map<String, dynamic>> fetchedRestaurants = [];
 
       for (var doc in querySnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>? ?? {};
-        print("📌 Données Firestore: $data");
-
-        // ✅ Récupération et formatage du nom
         String restaurantName = data["name"] ?? "Nom inconnu";
-        restaurantName = restaurantName.replaceAllMapped(
-          RegExp(r"(^\w|\s\w)"),
-              (match) => match.group(0)!.toUpperCase(),
-        );
-
-        // ✅ Gestion du type de cuisine (évite l'erreur si null)
         String cuisineType = data["cuisineType"]?.toString() ?? "Type inconnu";
-
-        // ✅ Récupération et conversion de l'image salle
         String sallePath = data["salle"] ?? "";
         String salleUrl = sallePath.isNotEmpty ? await getDownloadUrl(sallePath) : defaultImageUrl;
 
         fetchedRestaurants.add({
           "id": doc.id,
           "name": restaurantName,
-          "cuisineType": cuisineType, // 🔥 Corrigé ici !
+          "cuisineType": cuisineType,
           "salle": salleUrl,
         });
       }
-
-      print("✅ Restaurants récupérés : ${fetchedRestaurants.length}");
 
       if (mounted) {
         setState(() {
@@ -108,11 +68,23 @@ class _RestaurantListScreenState extends State<RestaurantListScreen> {
           isLoading = false;
         });
       }
-    } catch (e, stackTrace) {
+    } catch (e) {
       print("❌ Erreur lors de la récupération des restaurants : $e");
-      print("📌 StackTrace : $stackTrace");
-
       if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  /// 🔹 **Récupère l’image de la salle depuis Firebase Storage**
+  Future<String> getDownloadUrl(String filePath) async {
+    if (filePath.isEmpty) return defaultImageUrl;
+    if (filePath.startsWith("https://")) return filePath;
+
+    try {
+      final ref = FirebaseStorage.instance.ref(filePath.trim());
+      return await ref.getDownloadURL();
+    } catch (e) {
+      print("❌ Erreur récupération URL Firebase: $e");
+      return defaultImageUrl;
     }
   }
 
@@ -125,6 +97,55 @@ class _RestaurantListScreenState extends State<RestaurantListScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.orange,
+        actions: [
+          // ✅ Icône de filtre par ville
+          IconButton(
+            icon: const Icon(Icons.location_city),
+            tooltip: "Filtrer par ville",
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("Sélectionner une ville"),
+                  content: CityFilter(
+                    selectedCity: selectedCity,
+                    onCitySelected: (city) {
+                      setState(() {
+                        selectedCity = city;
+                      });
+                      fetchRestaurants();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // ✅ Icône de filtre par type de cuisine
+          IconButton(
+            icon: const Icon(Icons.restaurant_menu),
+            tooltip: "Filtrer par type de cuisine",
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text("Sélectionner un type de cuisine"),
+                  content: CuisineFilter(
+                    selectedCuisine: selectedCuisine,
+                    onCuisineSelected: (cuisine) {
+                      setState(() {
+                        selectedCuisine = cuisine;
+                      });
+                      fetchRestaurants();
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -175,7 +196,6 @@ class _RestaurantListScreenState extends State<RestaurantListScreen> {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) {
                               print("❌ Erreur chargement image: $error");
-                              print("🔍 URL utilisée: ${restaurant["salle"]}");
                               return const Icon(Icons.image_not_supported);
                             },
                           ),
@@ -196,7 +216,7 @@ class _RestaurantListScreenState extends State<RestaurantListScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            restaurant['cuisineType'] ?? "Type inconnu", // ✅ Si null, afficher "Type inconnu"
+                            restaurant['cuisineType'] ?? "Type inconnu",
                             style: const TextStyle(color: Colors.grey),
                             overflow: TextOverflow.ellipsis,
                           ),
